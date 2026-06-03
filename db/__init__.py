@@ -1,5 +1,5 @@
 from pymongo import MongoClient
-from config import settings
+from config import MONGODB_URI, MONGODB_DATABASE
 
 client = None
 db = None
@@ -9,8 +9,8 @@ def get_db():
     """Get the MongoDB database instance."""
     global client, db
     if client is None:
-        client = MongoClient(settings.mongodb_uri)
-        db = client[settings.mongodb_database]
+        client = MongoClient(MONGODB_URI)
+        db = client[MONGODB_DATABASE]
     return db
 
 
@@ -20,6 +20,6 @@ def test_connection():
         database = get_db()
         # The ping command is lightweight and verifies connectivity
         database.command("ping")
-        return {"status": "connected", "database": settings.mongodb_database}
+        return {"status": "connected", "database": MONGODB_DATABASE}
     except Exception as e:
         return {"status": "disconnected", "error": str(e)}
