@@ -11,3 +11,5 @@ starlette==1.2.1
 typing-extensions==4.15.0
 typing-inspection==0.4.2
 uvicorn==0.48.0
+pymongo==4.12.1
+pydantic-settings==2.8.1
