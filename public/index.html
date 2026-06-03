@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to FastAPI</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #loading {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #1a1a2e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            z-index: 100;
+            transition: opacity 1s;
+        }
+        #loading.hidden { opacity: 0; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="loading">Loading scene...</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Hide loader after scene renders
+        setTimeout(() => document.getElementById('loading').classList.add('hidden'), 500);
+
+        // ---- Scene ----
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb); // sky blue
+        scene.fog = new THREE.Fog(0x87ceeb, 20, 60);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(3, 2.0, 6);
+        camera.lookAt(0, 1.5, -1);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        document.body.appendChild(renderer.domElement);
+
+        // Controls (limited - keep view mostly fixed)
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 1.2, 0);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.autoRotate = false;
+        controls.minPolarAngle = 0.8;
+        controls.maxPolarAngle = 1.8;
+        controls.minDistance = 4;
+        controls.maxDistance = 15;
+        controls.update();
+
+        // ---- Sun / directional light ----
+        const sunLight = new THREE.DirectionalLight(0xffeedd, 2.0);
+        sunLight.position.set(20, 30, 10);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 60;
+        sunLight.shadow.camera.left = -15;
+        sunLight.shadow.camera.right = 15;
+        sunLight.shadow.camera.top = 15;
+        sunLight.shadow.camera.bottom = -15;
+        scene.add(sunLight);
+
+        const ambient = new THREE.AmbientLight(0x8888ff, 0.4);
+        scene.add(ambient);
+
+        const fill = new THREE.DirectionalLight(0x8888ff, 0.3);
+        fill.position.set(-10, 5, -10);
+        scene.add(fill);
+
+        // ---- Ground ----
+        const groundGeo = new THREE.PlaneGeometry(80, 80);
+        const groundMat = new THREE.MeshStandardMaterial({
+            color: 0x4caf50,
+            roughness: 0.9,
+            metalness: 0.0
+        });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = 0;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // ---- Mountains (background) ----
+        function createMountain(x, z, height, radius) {
+            const geo = new THREE.ConeGeometry(radius, height, 8 + Math.floor(Math.random() * 4));
+            const mat = new THREE.MeshStandardMaterial({
+                color: new THREE.Color().setHSL(0.3, 0.4, 0.2 + Math.random() * 0.15),
+                roughness: 0.8,
+                metalness: 0.0,
+                flatShading: true
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, height / 2, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            return mesh;
+        }
+
+        const mountainPositions = [
+            [-18, -15, 6, 5], [ -6, -18, 5, 4], [ 8, -16, 7, 6],
+            [20, -12, 4, 5],  [-12, -22, 8, 6], [15, -20, 5, 4],
+            [-22, -8, 4, 4],  [ 0, -20, 6, 5],  [25, -18, 5, 5],
+        ];
+        mountainPositions.forEach(([x, z, h, r]) => scene.add(createMountain(x, z, h, r)));
+
+        // ---- Trees (scattered) ----
+        function createTree(x, z) {
+            const group = new THREE.Group();
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 });
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.15, 1.0, 6), trunkMat);
+            trunk.position.y = 0.5;
+            trunk.castShadow = true;
+            group.add(trunk);
+
+            const foliageMat = new THREE.MeshStandardMaterial({
+                color: new THREE.Color().setHSL(0.3, 0.7, 0.3 + Math.random() * 0.2),
+                roughness: 0.8
+            });
+            const foliage = new THREE.Mesh(new THREE.SphereGeometry(0.4 + Math.random() * 0.3, 6, 6), foliageMat);
+            foliage.position.y = 1.2 + Math.random() * 0.3;
+            foliage.castShadow = true;
+            group.add(foliage);
+
+            group.position.set(x, 0, z);
+            group.rotation.y = Math.random() * Math.PI * 2;
+            return group;
+        }
+
+        const treePositions = [];
+        for (let i = 0; i < 30; i++) {
+            let x, z;
+            do {
+                x = (Math.random() - 0.5) * 30;
+                z = -5 - Math.random() * 15;
+            } while (Math.abs(x) < 4 && Math.abs(z + 5) < 6);
+            treePositions.push([x, z]);
+        }
+        treePositions.forEach(([x, z]) => scene.add(createTree(x, z)));
+
+        // ---- Build the Person ----
+        const personGroup = new THREE.Group();
+
+        const skinColor = 0xf5cba7;
+        const shirtColor = 0xe74c3c;
+        const pantsColor = 0x2c3e50;
+        const shoeColor = 0x1a1a1a;
+
+        // Torso
+        const torso = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.4, 0.5, 0.8, 10),
+            new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.6 })
+        );
+        torso.position.y = 0.65;
+        torso.castShadow = true;
+        personGroup.add(torso);
+
+        // Neck
+        const neck = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.12, 0.12, 0.08, 6),
+            new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.8 })
+        );
+        neck.position.y = 1.05;
+        personGroup.add(neck);
+
+        // Head
+        const head = new THREE.Mesh(
+            new THREE.SphereGeometry(0.3, 20, 20),
+            new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.6 })
+        );
+        head.position.y = 1.3;
+        head.castShadow = true;
+        personGroup.add(head);
+
+        // Eyes (happy squint - slightly smaller, positioned with crinkles)
+        const eyeMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50 });
+        const eyeGeo = new THREE.SphereGeometry(0.055, 8, 8);
+        
+        const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+        leftEye.position.set(-0.1, 1.35, 0.26);
+        personGroup.add(leftEye);
+        
+        const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+        rightEye.position.set(0.1, 1.35, 0.26);
+        personGroup.add(rightEye);
+
+        // Eye highlights (gleam of joy)
+        const gleamMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        const gleamGeo = new THREE.SphereGeometry(0.018, 6, 6);
+        const leftGleam = new THREE.Mesh(gleamGeo, gleamMat);
+        leftGleam.position.set(-0.08, 1.36, 0.31);
+        personGroup.add(leftGleam);
+        const rightGleam = new THREE.Mesh(gleamGeo, gleamMat);
+        rightGleam.position.set(0.12, 1.36, 0.31);
+        personGroup.add(rightGleam);
+
+        // Eyebrows (arched up for happy expression)
+        const browMat = new THREE.MeshStandardMaterial({ color: 0x4a3728 });
+        const browGeo = new THREE.TorusGeometry(0.07, 0.012, 4, 8, Math.PI);
+        
+        const leftBrow = new THREE.Mesh(browGeo, browMat);
+        leftBrow.position.set(-0.1, 1.42, 0.25);
+        leftBrow.rotation.z = 0.15;
+        leftBrow.rotation.x = 0.1;
+        personGroup.add(leftBrow);
+        
+        const rightBrow = new THREE.Mesh(browGeo, browMat);
+        rightBrow.position.set(0.1, 1.42, 0.25);
+        rightBrow.rotation.z = -0.15;
+        rightBrow.rotation.x = 0.1;
+        personGroup.add(rightBrow);
+
+        // Rosy cheeks
+        const cheekMat = new THREE.MeshStandardMaterial({ color: 0xffaaaa, transparent: true, opacity: 0.4 });
+        const cheekGeo = new THREE.SphereGeometry(0.055, 6, 6);
+        const leftCheek = new THREE.Mesh(cheekGeo, cheekMat);
+        leftCheek.position.set(-0.2, 1.26, 0.22);
+        personGroup.add(leftCheek);
+        const rightCheek = new THREE.Mesh(cheekGeo, cheekMat);
+        rightCheek.position.set(0.2, 1.26, 0.22);
+        personGroup.add(rightCheek);
+
+        // Big happy smile
+        const mouthMat = new THREE.MeshStandardMaterial({ color: 0xc0392b });
+        const mouthGeo = new THREE.TorusGeometry(0.07, 0.016, 6, 12, Math.PI);
+        const mouth = new THREE.Mesh(mouthGeo, mouthMat);
+        mouth.position.set(0, 1.22, 0.3);
+        mouth.rotation.x = 0.15;
+        mouth.rotation.z = 0.0;
+        personGroup.add(mouth);
+
+        // Teeth (small white strip inside smile)
+        const teethMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        const teethGeo = new THREE.BoxGeometry(0.04, 0.02, 0.02);
+        const teeth = new THREE.Mesh(teethGeo, teethMat);
+        teeth.position.set(0, 1.205, 0.33);
+        personGroup.add(teeth);
+
+        // Nose (tiny)
+        const noseMat = new THREE.MeshStandardMaterial({ color: 0xe8b88a });
+        const noseGeo = new THREE.SphereGeometry(0.025, 6, 6);
+        const nose = new THREE.Mesh(noseGeo, noseMat);
+        nose.position.set(0, 1.28, 0.3);
+        personGroup.add(nose);
+
+        // Hair
+        const hair = new THREE.Mesh(
+            new THREE.SphereGeometry(0.31, 14, 14, 0, Math.PI * 2, 0, Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 0.9 })
+        );
+        hair.scale.y = 0.3;
+        hair.position.y = 1.4;
+        personGroup.add(hair);
+
+        // Arms
+        const armMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.7 });
+        const armGeo = new THREE.CylinderGeometry(0.08, 0.1, 0.6, 6);
+
+        const leftArm = new THREE.Mesh(armGeo, armMat);
+        leftArm.position.set(-0.55, 0.7, 0);
+        leftArm.rotation.z = 0.15;
+        personGroup.add(leftArm);
+
+        const rightArm = new THREE.Mesh(armGeo, armMat);
+        rightArm.position.set(0.55, 0.7, 0);
+        rightArm.rotation.z = -0.15;
+        personGroup.add(rightArm);
+
+        // Legs
+        const legMat = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.7 });
+        const legGeo = new THREE.CylinderGeometry(0.12, 0.1, 0.5, 6);
+
+        const leftLeg = new THREE.Mesh(legGeo, legMat);
+        leftLeg.position.set(-0.16, 0.2, 0);
+        personGroup.add(leftLeg);
+
+        const rightLeg = new THREE.Mesh(legGeo, legMat);
+        rightLeg.position.set(0.16, 0.2, 0);
+        personGroup.add(rightLeg);
+
+        // Shoes
+        const shoeMat = new THREE.MeshStandardMaterial({ color: shoeColor, roughness: 0.9 });
+        const shoeGeo = new THREE.BoxGeometry(0.16, 0.06, 0.3);
+        const leftShoe = new THREE.Mesh(shoeGeo, shoeMat);
+        leftShoe.position.set(-0.16, 0.0, 0.03);
+        personGroup.add(leftShoe);
+        const rightShoe = new THREE.Mesh(shoeGeo, shoeMat);
+        rightShoe.position.set(0.16, 0.0, 0.03);
+        personGroup.add(rightShoe);
+
+        // --- Welcome Board (held in right hand) — with canvas text texture ---
+        const boardGroup = new THREE.Group();
+
+        // Create canvas with "Welcome to FastAPI" text
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 140;
+        const ctx = canvas.getContext('2d');
+
+        // Background
+        ctx.fillStyle = '#f5deb3';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Border
+        ctx.strokeStyle = '#6d4c2a';
+        ctx.lineWidth = 6;
+        ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
+
+        // Inner border
+        ctx.strokeStyle = '#8B6914';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(14, 14, canvas.width - 28, canvas.height - 28);
+
+        // Decorative corners
+        ctx.fillStyle = '#6d4c2a';
+        [
+            [14, 14], [canvas.width - 36, 14],
+            [14, canvas.height - 36], [canvas.width - 36, canvas.height - 36]
+        ].forEach(([x, y]) => {
+            ctx.fillRect(x, y, 22, 22);
+        });
+        ctx.fillStyle = '#f5deb3';
+        [
+            [18, 18], [canvas.width - 32, 18],
+            [18, canvas.height - 32], [canvas.width - 32, canvas.height - 32]
+        ].forEach(([x, y]) => {
+            ctx.fillRect(x, y, 14, 14);
+        });
+
+        // Text line 1: "Welcome to"
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = 'bold 22px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('✨ Welcome to ✨', canvas.width / 2, 36);
+
+        // Text line 2: "FastAPI" (larger, colorful)
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 40px Arial, sans-serif';
+        ctx.fillText('FastAPI', canvas.width / 2, 84);
+
+        // Text line 3: subtitle
+        ctx.fillStyle = '#7f8c8d';
+        ctx.font = '16px Arial, sans-serif';
+        ctx.fillText('Deployed on Vercel', canvas.width / 2, 118);
+
+        const boardTexture = new THREE.CanvasTexture(canvas);
+        boardTexture.encoding = THREE.sRGBEncoding;
+
+        // Board stick
+        const stick = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.03, 0.03, 0.8, 6),
+            new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 })
+        );
+        stick.position.y = 0.4;
+        boardGroup.add(stick);
+
+        // Board plaque with texture
+        const boardMat = new THREE.MeshStandardMaterial({
+            map: boardTexture,
+            roughness: 0.6,
+            metalness: 0.0
+        });
+        const boardMesh = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.38, 0.03), boardMat);
+        boardMesh.position.y = 0.85;
+        boardGroup.add(boardMesh);
+
+        // Board border (darker frame) — using thin box geometry
+        const borderMat = new THREE.MeshStandardMaterial({ color: 0x6d4c2a });
+        const borders = [
+            { pos: [0, 1.04, 0], scale: [0.74, 0.02, 0.04] },
+            { pos: [0, 0.66, 0], scale: [0.74, 0.02, 0.04] },
+            { pos: [-0.36, 0.85, 0], scale: [0.02, 0.40, 0.04] },
+            { pos: [0.36, 0.85, 0], scale: [0.02, 0.40, 0.04] },
+        ];
+        borders.forEach(b => {
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(...b.scale), borderMat);
+            mesh.position.set(b.pos[0], b.pos[1], b.pos[2]);
+            boardGroup.add(mesh);
+        });
+
+        // Position board in right hand — angled so text is visible
+        boardGroup.position.set(0.6, 0.55, 0.25);
+        boardGroup.rotation.z = -0.2;
+        boardGroup.rotation.x = -0.1;
+        boardGroup.rotation.y = 0.3;
+        personGroup.add(boardGroup);
+
+        // Start person far away
+        personGroup.position.set(0, 0, -18);
+        scene.add(personGroup);
+
+        // ---- Grass patches (simple small meshes) ----
+        const grassMat = new THREE.MeshStandardMaterial({
+            color: 0x3d8b37,
+            roughness: 0.9
+        });
+        for (let i = 0; i < 60; i++) {
+            const blade = new THREE.Mesh(
+                new THREE.ConeGeometry(0.02, 0.1 + Math.random() * 0.15, 3),
+                grassMat
+            );
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 1 + Math.random() * 4;
+            blade.position.set(
+                Math.cos(angle) * dist,
+                0.05,
+                -3 + Math.sin(angle) * dist
+            );
+            blade.rotation.x = (Math.random() - 0.5) * 0.3;
+            blade.rotation.z = (Math.random() - 0.5) * 0.3;
+            scene.add(blade);
+        }
+
+        // ---- Welcome text overlay (HTML) ----
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 3.5rem;
+            font-weight: bold;
+            text-align: center;
+            text-shadow: 3px 3px 15px rgba(0,0,0,0.8), 0 0 40px rgba(0,0,0,0.5);
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 1.5s ease;
+            pointer-events: none;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            letter-spacing: 2px;
+            line-height: 1.3;
+        `;
+        overlay.innerHTML = '🚀 Welcome to FastAPI<br><span style="font-size:1.3rem;opacity:0.8;">Deployed on Vercel</span>';
+        document.body.appendChild(overlay);
+
+        // ---- Controls Check ----
+        const controlsEnabled = true;
+
+        // ---- Animation State ----
+        // Phase 1: Run towards camera (0 to 1)
+        // Phase 2: Stop and show board
+        let phase = 0; // 0 = running, 1 = stopped
+        let runProgress = 0;
+        const startZ = -18;
+        const endZ = -1.5;
+        const runDuration = 4000; // ms
+        let runStartTime = Date.now();
+
+        // ---- Floating leaves ----
+        const leafCount = 20;
+        const leaves = [];
+        for (let i = 0; i < leafCount; i++) {
+            const leaf = new THREE.Mesh(
+                new THREE.PlaneGeometry(0.05, 0.03),
+                new THREE.MeshStandardMaterial({
+                    color: 0x8BC34A,
+                    transparent: true,
+                    opacity: 0.6,
+                    side: THREE.DoubleSide
+                })
+            );
+            leaf.position.set(
+                (Math.random() - 0.5) * 20,
+                1 + Math.random() * 4,
+                -Math.random() * 15
+            );
+            leaf.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+            scene.add(leaf);
+            leaves.push({ mesh: leaf, speed: 0.2 + Math.random() * 0.3, rotSpeed: Math.random() * 0.02 });
+        }
+
+        // ---- Sunglare ----
+        const sunSprite = new THREE.Mesh(
+            new THREE.SphereGeometry(0.5, 8, 8),
+            new THREE.MeshBasicMaterial({ color: 0xffffcc, transparent: true, opacity: 0.15 })
+        );
+        sunSprite.position.set(20, 30, 10);
+        scene.add(sunSprite);
+
+        // ---- Animation ----
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsed = Date.now() - runStartTime;
+            const time = Date.now() * 0.002;
+
+            // ---- Phase 1: Running ----
+            if (phase === 0) {
+                runProgress = Math.min(elapsed / runDuration, 1);
+                // Ease-in-out
+                const eased = runProgress < 0.5
+                    ? 2 * runProgress * runProgress
+                    : 1 - Math.pow(-2 * runProgress + 2, 2) / 2;
+
+                personGroup.position.z = startZ + (endZ - startZ) * eased;
+
+                // Running animation
+                const runCycle = time * 5;
+                const step = Math.sin(runCycle) * 0.5;
+                leftLeg.rotation.x = step;
+                rightLeg.rotation.x = -step;
+                const armSwing = Math.sin(runCycle + Math.PI) * 0.5;
+                leftArm.rotation.x = 0.2 + armSwing;
+                rightArm.rotation.x = -0.2 - armSwing;
+
+                // Body bob
+                personGroup.position.y = Math.abs(Math.sin(runCycle)) * 0.06;
+
+                // Board bounce
+                boardGroup.position.y = 0.55 + Math.abs(Math.sin(runCycle * 1.2)) * 0.03;
+
+                // Transition to phase 2
+                if (runProgress >= 1) {
+                    phase = 1;
+                    runProgress = 1;
+                    personGroup.position.z = endZ;
+                    // Show welcome overlay with fade in
+                    setTimeout(() => { overlay.style.opacity = '1'; }, 200);
+                }
+            }
+
+            // ---- Phase 2: Stopped, showing board ----
+            if (phase === 1) {
+                // Gentle standing animation
+                const breathe = Math.sin(time * 2) * 0.008;
+                torso.position.y = 0.65 + breathe;
+                head.position.y = 1.3 + breathe;
+
+                // Slight arm adjustment - hold board up
+                rightArm.rotation.x = -0.4 + Math.sin(time * 1.5) * 0.08;
+                rightArm.rotation.z = -0.35;
+                leftArm.rotation.x = 0.15 + Math.sin(time * 1.5) * 0.05;
+
+                // Board steady with slight bob
+                boardGroup.position.y = 0.55 + Math.sin(time * 1.5) * 0.02;
+                boardGroup.rotation.z = -0.3 + Math.sin(time) * 0.02;
+
+                // Legs still
+                leftLeg.rotation.x *= 0.9;
+                rightLeg.rotation.x *= 0.9;
+
+                personGroup.position.y = Math.sin(time * 2) * 0.01;
+            }
+
+            // ---- Leaves animation ----
+            leaves.forEach(l => {
+                l.mesh.position.y -= l.speed * 0.01;
+                l.mesh.position.x += Math.sin(time + l.mesh.id) * 0.003;
+                l.mesh.rotation.x += l.rotSpeed;
+                l.mesh.rotation.y += l.rotSpeed * 0.7;
+                if (l.mesh.position.y < -1) {
+                    l.mesh.position.y = 2 + Math.random() * 3;
+                    l.mesh.position.x = (Math.random() - 0.5) * 20;
+                }
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // ---- Resize ----
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
