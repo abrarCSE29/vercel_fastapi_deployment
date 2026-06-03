@@ -312,7 +312,7 @@
             if (musicPlaying) return;
             musicPlaying = true;
 
-            audio = new Audio('public/welcome.mp3');
+            audio = new Audio('/api/static/welcome.mp3');
             audio.volume = 0.6;
             audio.play().catch(() => {
                 // Autoplay blocked — user will need to interact
@@ -345,7 +345,7 @@
             pointer-events: none;
             font-family: 'Segoe UI', Arial, sans-serif; letter-spacing: 2px; line-height: 1.3;
         `;
-        overlay2.innerHTML = '<span style="font-size:2rem;opacity:0.8;"><h2>🚀 Welcome to FastAPI 🚀</h2> Deployed on Vercel</span>';
+        overlay2.innerHTML = 'রাগ করলা ?<br><span style="font-size:1.3rem;opacity:0.8;">🚀 Welcome to FastAPI — Deployed on Vercel</span>';
         document.body.appendChild(overlay2);
 
         // ---- Leaves ----
